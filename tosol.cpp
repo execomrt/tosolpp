@@ -256,6 +256,7 @@ void SourceDef::Parse(char* value)
 	}
 	ClassDef* newClass = nullptr;
 	int state = 0;
+	bool isExplicit = false;
 	for (auto it : lines) {
 		String paramBlock;
 		String defBlock;
@@ -288,6 +289,18 @@ void SourceDef::Parse(char* value)
 					{
 						MethodDef newMethod;
 						newMethod.isConst = false;
+						newMethod.forceStrongType = fields.find("t") != fields.end() || newClass->isExplicit;
+						if (elemt[0] == "explicit") {
+							
+							newMethod.forceStrongType = 1;
+							elemt.erase(elemt.begin());
+						}
+
+						if (elemt[0] == "virtual") {
+
+							elemt.erase(elemt.begin());
+						}
+
 						newMethod.methodName = methodName;
 						if (elemt.size() >= 2) {
 							if (elemt[0] == "const" &&
@@ -421,12 +434,18 @@ void SourceDef::Parse(char* value)
 						namespaceName = elemt[2];
 					}
 				}
+				if (elemt[0] == "explicit") {
+					isExplicit = true;
+					elemt.erase(elemt.begin());
+				}
 				if (elemt[0] == "module") {
 					moduleName = elemt[1];
 				}
 				else if (elemt[0] == "class" || elemt[0] == "struct") {
 					newClass = new ClassDef();
 					newClass->name = elemt[1];
+					newClass->isExplicit = isExplicit;
+					isExplicit = false;
 					if (elemt.size() >= 2) {
 						bool hasInherits = false;
 						for (int k = 2; k < elemt.size(); k++) {							
@@ -514,7 +533,7 @@ String SourceDef::GenerateCode(String name)
 	}
 	String module = "tosol_S";
 	if (moduleName.length() > 0) {
-		ret = ret + " sol::table _" + moduleName + " tosol_S.create_named_table(\"" + moduleName + "\"); \n";
+		ret = ret + " sol::table _" + moduleName + " = tosol_S.create_named_table(\"" + moduleName + "\"); \n";
 		module = "_" +moduleName;
 	}
 	for (auto c : classes) {
@@ -585,9 +604,13 @@ String SourceDef::GenerateCode(String name)
 			else if (m.methodName == "operator/") {
 				metaFunction = "sol::meta_function::division";
 			}
+			else if (m.methodName == "operator^") {
+				metaFunction = "sol::meta_function::involution";
+			}
 			else if (m.methodName == "operator==") {
 				metaFunction = "sol::meta_function::equal_to";
-			}			
+			}	
+			
 			else if (m.methodName == "operator<") {
 				metaFunction = "sol::meta_function::less_than";
 			}
@@ -609,10 +632,11 @@ String SourceDef::GenerateCode(String name)
 			else
 			if (m.methodName == "operator+=" ||
 				m.methodName == "operator-=" ||
+				m.methodName == "operator!=" ||
 				m.methodName == "operator/=" ||
 				m.methodName == "operator*=")
 			{
-				fprintf(stdout, "Warning : addition, substraction etc... operators are not supported by Lua.\n");
+				fprintf(stdout, ("Warning : "  + m.methodName + " is not supported by Lua.\n") .c_str());
 			}
 			else
 			{
@@ -640,7 +664,11 @@ String SourceDef::GenerateCode(String name)
 							if (r.isConst) {
 								proto = proto + " const";
 							}							
+							
+
+							
 							ret = ret + "\t\tsol::resolve<" + proto + ">(&" + c->name + "::" + m.methodName + ")";
+							
 								
 						}
 						else
@@ -649,7 +677,8 @@ String SourceDef::GenerateCode(String name)
 							if (r.isConst) {
 								proto = proto + " const";
 							}
-							ret = ret + "\t\tsol::resolve<" + proto + ">(&" + c->name + "::" + m.methodName + ")";
+							
+							ret = ret + "\t\tsol::resolve<" + proto + ">(&" + c->name + "::" + m.methodName + ")";							
 							
 						}
 					}
@@ -658,12 +687,12 @@ String SourceDef::GenerateCode(String name)
 					
 				}
 				else {
-					if (true)
-					{
-						if (index) {
-							ret = ret + ",\n";
-						}
-						index++;
+					if (index) {
+						ret = ret + ",\n";
+					}
+					index++;
+					if (m.forceStrongType)
+					{					
 						auto r = m.overloads[0];
 						String proto = PointerToSharedPtr(m.returnType) + r.Construct((int)r.parameters.size());
 						if (r.isConst) {
@@ -775,6 +804,7 @@ static void help(void)
 		// "  -H  file : create include file.\n"
 		"  -n  name : set package name; default is input file root name.\n"
 		"  -s       : Use sol::lua instead of Lua_State and sol::state_view.\n"
+		"  -t       : Force strong typed (sol::resolve).\n"
 		"  -x       : Convert all pointers to std::shared_ptr\n"
 		"  -h       : print this message.\n"
 		"Should the input file be omitted, stdin is assumed;\n"
@@ -860,12 +890,13 @@ int main(int argc, char* argv[])
 			case 'H': setfield(t, "H", argv[++i]); break;
 			case 's': setfield(t, "s", ""); break;
 			case '1': setfield(t, "1", ""); break;
+			case 't': setfield(t, "t", ""); break;
 			case 'L': setfield(t, "L", argv[++i]); break;
 			case 'D': setfield(t, "D", ""); break;
 			case 'W': setfield(t, "W", ""); break;
 			case 'C': setfield(t, "C", ""); break;
 			case 'E': add_extra(argv[++i]); break;
-			case 't': setfield(t, "t", ""); break;
+			
 			case 'q': setfield(t, "q", ""); break;
 			default: error(argv[i]); break;
 			}

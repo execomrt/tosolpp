@@ -117,10 +117,26 @@ tosol -o b2Vec2.inl b2Vec2.pkg
 
 - Supports inherited classes, operators, default arguments, static variable, static const variable
 
-## Features
+## Issues
 
-- override are disabled for the moment.
 - the prototype in pkg must be exactly like described in pkg (a modifier is planned)
+
+## Options
+
+- By default, the generator will avoid sol::overload, if you have problem with
+mismatched, name your method as 'explicit'
+for example:
+
+   class Player  
+   {
+	  explicit int GetValue(int value);
+   }
+
+   explicit class Player
+   {
+   	   ....
+   }
+   
 
 ## Supported Compilers
 

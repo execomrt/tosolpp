@@ -37,9 +37,12 @@ public:
 class MethodDef
 {
 public:
+	
+
 	bool isConst;
 	bool isStatic;
 	bool isOverload;
+	bool forceStrongType;
 	String returnType;
 	String methodName;
 	std::vector<SignatureDef> overloads;
@@ -69,6 +72,7 @@ public:
 class ClassDef
 {
 public:
+	bool isExplicit;
 	String name;
 	String aliasName;
 	String moduleName;
