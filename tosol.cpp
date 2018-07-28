@@ -498,26 +498,28 @@ String SourceDef::GenerateCode(String name)
 			index++;
 		}
 
-		/*
-		for (auto m : c->variables) {
+		if (fields.find("l") != fields.end()) {
+			
+			for (auto m : c->variables) {
 
-			String getter = "tolua_" + name + "_" + c->name + "_" + m.varName + "_get";
-			String setter = "tolua_" + name + "_" + c->name + "_" + m.varName + "_set";
-
-			if (m.isStatic) {
-				ret = ret + "inline static " +  m.varType + " " +  getter + "(void)" + "\n";
-				ret = ret + "{\n return " + c->name + "::" + m.varName + "; \n}";;
+			
 				
+				String getter = "tolua_" + name + "_" + c->name + "_" + m.varName + "_get";
+				String setter = "tolua_" + name + "_" + c->name + "_" + m.varName + "_set";
 
-				if (!m.isConst) {
-					ret = ret + "inline static void " + setter + "("+m.varType+" value)" + "\n";
-					ret = ret + "{\n " + c->name + "::" + m.varName + " = value; \n}";
+				if (m.isStatic) {
+					ret = ret + "inline static " + m.varType + " " + getter + "(void)" + "\n";
+					ret = ret + "{\n return " + c->name + "::" + m.varName + "; \n}\n";
+
+					if (!m.isConst) {
+						ret = ret + "inline static void " + setter + "(" + m.varType + " value)" + "\n";
+						ret = ret + "{\n " + c->name + "::" + m.varName + " = value; \n}\n";
+					}
+
 				}
-					
+
 			}
-	
 		}
-		*/
 	}
 	ret = ret + "\n";
 	auto optUseSolLua = fields.find("s");
@@ -536,8 +538,13 @@ String SourceDef::GenerateCode(String name)
 		ret = ret + " sol::table _" + moduleName + " = tosol_S.create_named_table(\"" + moduleName + "\"); \n";
 		module = "_" +moduleName;
 	}
+
 	for (auto c : classes) {
-		ret = ret + " "+ module +".new_usertype<" + ( c->name) + ">(\"" + (c->aliasName.length() ? c->aliasName : c->name) + "\",";
+
+		auto method = c->variables.size() == 0 ? "new_simple_usertype" : "new_usertype";
+
+
+		ret = ret + " "+ module +"."+ method +"<" + ( c->name) + ">(\"" + (c->aliasName.length() ? c->aliasName : c->name) + "\",";
 		ret = ret + " \n";
 		int index = 0;
 		/************************************************************************************
@@ -642,7 +649,7 @@ String SourceDef::GenerateCode(String name)
 			{
 				
 				numMethod++;
-				if (m.isOverload)  {
+				if (m.isOverload && m.overloads.size() > 1)  {
 
 					if (index) {
 						ret = ret + ",\n";
@@ -720,27 +727,28 @@ String SourceDef::GenerateCode(String name)
 			}
 			index++;	
 
-			/*
+			
 			String getter = "tolua_" + name + "_" + c->name + "_" + m.varName + "_get";
 			String setter = "tolua_" + name + "_" + c->name + "_" + m.varName + "_set";
-			*/
+			
 			String lambda_getter = "[]() { return " + c->name + "::" + m.varName + "; }";
 			String lambda_setter = "[](" + m.varType + " value) { " + c->name + "::" + m.varName + " = value; }";
 
 			if (m.isStatic) {
 
-				if (m.isConst)
-					ret = ret + " \t\"" + m.varName + "\", sol::property(" + lambda_getter + ")";
+				if (fields.find("l") == fields.end()) {
+					if (m.isConst)
+						ret = ret + " \t\"" + m.varName + "\", sol::property(" + lambda_getter + ")";
+					else
+						ret = ret + " \t\"" + m.varName + "\", sol::property(" + lambda_getter + ", " + lambda_setter + " )";
+				}
 				else
-					ret = ret + " \t\"" + m.varName + "\", sol::property(" + lambda_getter + ", " + lambda_setter + " )";
-				
-
-				/*
-				if (m.isConst)
-					ret = ret + " \t\"" + m.varName + "\", sol::property(&" + getter + ")";
-				else
-					ret = ret + " \t\"" + m.varName + "\", sol::property(&" + getter + ", &" + setter + " )";
-				*/
+				{
+					if (m.isConst)
+						ret = ret + " \t\"" + m.varName + "\", sol::property(&" + getter + ")";
+					else
+						ret = ret + " \t\"" + m.varName + "\", sol::property(&" + getter + ", &" + setter + " )";
+				}
 			}
 			else {
 				ret = ret + " \t\"" + m.varName + "\", &" + c->name + "::" + m.varName;
@@ -759,23 +767,25 @@ String SourceDef::GenerateCode(String name)
 			DEFAULT CTORS
 		*/
 
-		if (c->ctors.size() > 0) {
-			ret = ret + " tosol_S[\"" + (c->aliasName.length() ? c->aliasName : c->name) + "\"] =\n";
-			ret = ret + "\tsol::overload(\n";
-			index = 0;
-			for (auto m : c->ctors) {
+		if (fields.find("c") != fields.end() || c->ctors.size() == 1) {
+			if (c->ctors.size() > 0) {
+				ret = ret + " tosol_S[\"" + (c->aliasName.length() ? c->aliasName : c->name) + "\"] =\n";
+				ret = ret + "\tsol::overload(\n";
+				index = 0;
+				for (auto m : c->ctors) {
 
-				String fun = "tolua_" + name + "_" + c->name + "_" + std::to_string(index);
-				String proto = c->name + m.overload.Signature();
-				if (index > 0) {
-					ret = ret + ", \n";
+					String fun = "tolua_" + name + "_" + c->name + "_" + std::to_string(index);
+					String proto = c->name + m.overload.Signature();
+					if (index > 0) {
+						ret = ret + ", \n";
+					}
+					ret = ret + "\t\tsol::resolve<" + proto + " >(&" + fun + ")";
+					index++;
 				}
-				ret = ret + "\t\tsol::resolve<" + proto + " >(&" + fun + ")";
-				index++;
 			}
-		}
-		if (c->ctors.size() > 0) {
-			ret = ret + ");";
+			if (c->ctors.size() > 0) {
+				ret = ret + ");";
+			}
 		}
 
 		ret = ret + "\n";
@@ -805,7 +815,11 @@ static void help(void)
 		"  -n  name : set package name; default is input file root name.\n"
 		"  -s       : Use sol::lua instead of Lua_State and sol::state_view.\n"
 		"  -t       : Force strong typed (sol::resolve).\n"
+		"  -l       : Disable lambda for getter (out of section)\n"
 		"  -x       : Convert all pointers to std::shared_ptr\n"
+		"  -c       : Generate overloaded ctor with .new - not compatible with C++ 17\n"
+
+		
 		"  -h       : print this message.\n"
 		"Should the input file be omitted, stdin is assumed;\n"
 		"in that case, the package name must be explicitly set.\n\n"
@@ -891,6 +905,7 @@ int main(int argc, char* argv[])
 			case 's': setfield(t, "s", ""); break;
 			case '1': setfield(t, "1", ""); break;
 			case 't': setfield(t, "t", ""); break;
+			case 'l': setfield(t, "l", ""); break;
 			case 'L': setfield(t, "L", argv[++i]); break;
 			case 'D': setfield(t, "D", ""); break;
 			case 'W': setfield(t, "W", ""); break;
