@@ -1,0 +1,62 @@
+$using namespace Samples1
+
+/// A 2D column vector.
+
+struct b2Vec2 @ Vec2
+{
+	/// Default constructor does nothing (for performance).
+	b2Vec2();
+
+	/// Construct using coordinates.
+	b2Vec2(float xIn, float yIn);
+
+	/// Set this vector to all zeros.
+	void SetZero();
+
+	/// Set this vector to some specified coordinates.
+	void Set(float x_, float y_ );
+
+	/// Negate this vector.
+	b2Vec2 operator -() const;
+
+	/// Write to an indexed element.
+	float& operator [] (int i);
+
+	/// Add a vector to this vector.
+	void operator += (const b2Vec2& v);
+
+	/// Add a vector to this vector.
+	b2Vec2 operator + (const b2Vec2& a);
+
+	/// Subtract a vector to this vector.
+	b2Vec2 operator - (const b2Vec2& a);
+
+	/// Subtract a vector from this vector.
+	void operator -= (const b2Vec2& v);
+
+	/// Multiply this vector by a scalar.
+	void operator * (const b2Vec2& a);
+	void operator * (float);
+
+	/// Get the length of this vector (the norm).
+	float Length() const;
+
+	/// Get the length squared. For performance, use this instead of
+	/// b2Vec2::Length (if possible).
+	float LengthSquared() const;
+
+	/// Convert this vector into a unit vector. Returns the length.
+	float Normalize();
+
+	/// Does this vector contain finite coordinates?
+	bool IsValid() const;
+
+	/// Get the skew vector such that dot(skew_vec, other) == cross(vec, other)
+	b2Vec2 Skew() const;
+
+	float x, y;
+
+	std::string ToString();
+
+	static const b2Vec2 ZERO;
+};
