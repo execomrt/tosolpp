@@ -10,8 +10,6 @@
 
 #include "tosol.h"
 
-// Disabled for now (issues)
-#define ALLOW_OVERLOAD 0
 
 std::map<String, String> fields;
 String trim(const String& str,
@@ -620,7 +618,7 @@ String SourceDef::GenerateCode(String name)
 			{
 				
 				numMethod++;
-				if (m.isOverload && ALLOW_OVERLOAD)  {
+				if (m.isOverload)  {
 
 					if (index) {
 						ret = ret + ",\n";
@@ -637,19 +635,13 @@ String SourceDef::GenerateCode(String name)
 					
 						overloadIndex++;
 						if (r.hasDefaultParameter) {
-							for (int i = 0; i <= r.parameters.size() - r.GetNumExplicitParameters() ; i++) {
-								String proto = PointerToSharedPtr(m.returnType) + r.Construct(i);
-								if (r.isConst) {
-									proto = proto + " const";
-								}
-								if (i > 0) {
-									ret = ret + ",\n";
-								}
-								ret = ret + "\t\tsol::resolve<" + proto + ">(&" + c->name + "::" + m.methodName + ")";
+							int i = r.parameters.size() - r.GetNumExplicitParameters();
+							String proto = PointerToSharedPtr(m.returnType) + r.Construct(i);
+							if (r.isConst) {
+								proto = proto + " const";
+							}							
+							ret = ret + "\t\tsol::resolve<" + proto + ">(&" + c->name + "::" + m.methodName + ")";
 								
-								
-								
-							}
 						}
 						else
 						{
@@ -700,6 +692,7 @@ String SourceDef::GenerateCode(String name)
 			index++;	
 
 			/*
+			String getter = "tolua_" + name + "_" + c->name + "_" + m.varName + "_get";
 			String setter = "tolua_" + name + "_" + c->name + "_" + m.varName + "_set";
 			*/
 			String lambda_getter = "[]() { return " + c->name + "::" + m.varName + "; }";
