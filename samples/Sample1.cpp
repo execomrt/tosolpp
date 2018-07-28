@@ -18,7 +18,7 @@ namespace Samples1
 		b2Vec2() : x(0), y(0) {}
 
 		/// Construct using coordinates.
-		b2Vec2(double  xIn, double  yIn) : x(xIn), y(yIn) {}
+		b2Vec2(const float xIn, const float yIn) : x(xIn), y(yIn) {}
 
 		/// Set this vector to all zeros.
 		void SetZero() {}

@@ -16,7 +16,7 @@
 #include <map>
 #include <vector>
 
-#define TOSOL_VERSION "0.0.9"
+#define TOSOL_VERSION "0.1.0"
 
 #define String std::string
 

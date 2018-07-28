@@ -4,9 +4,15 @@
  tosol++ is an extension of Sol, a tool to integrate C/CPP code with Lua
  Uses the same format(PKG) than tolua++ (https://github.com/LuaDist/toluapp)
  Sol2 https://github.com/ThePhD/sol2
- ======================Lua_State====================================================*/
+ 
+ This project : https://github.com/execomrt/tosolpp
+ ==============================================================================*/
+
 #include "tosol.h"
+
+// Disabled for now (issues)
 #define ALLOW_OVERLOAD 0
+
 std::map<String, String> fields;
 String trim(const String& str,
 	const String& whitespace = " \t")
@@ -94,8 +100,15 @@ void SignatureDef::CreateFromString(String & paramBlock, bool isCtor)
 			}
 			auto v = split(p, ' ');
 			if (v.size() >= 2 && isCtor) {
-				std::tuple<String, String> pair = { v[0], v[1] };
-				parameters.push_back(pair);
+				if (v.size() == 3) {
+					std::tuple<String, String> pair = { v[0] + " " + v[1], v[2] };
+					parameters.push_back(pair);
+				}
+				else
+				{
+					std::tuple<String, String> pair = { v[0], v[1] };
+					parameters.push_back(pair);
+				}
 			}
 			else {
 				std::tuple<String, String> pair = { p, "" };
@@ -278,6 +291,14 @@ void SourceDef::Parse(char* value)
 						MethodDef newMethod;
 						newMethod.isConst = false;
 						newMethod.methodName = methodName;
+						if (elemt.size() >= 2) {
+							if (elemt[0] == "const" &&
+								elemt[1] == "static")
+							{
+								auto tmp = elemt[0]; elemt[0] = elemt[1]; elemt[1] = tmp;
+							}
+						}
+						
 						if (elemt[0] == "static") {
 							newMethod.isStatic = true;							
 							newMethod.returnType = elemt[1];
@@ -343,6 +364,15 @@ void SourceDef::Parse(char* value)
 						bool isConst = false;
 						String varType, varBlock;
 						int varBlockIndex = 0;
+
+						if (elemt.size() >= 2) {
+							if (elemt[0] == "const" &&
+								elemt[1] == "static")
+							{
+								auto tmp = elemt[0]; elemt[0] = elemt[1]; elemt[1] = tmp;
+							}
+						}
+
 						if (elemt[0] == "static") {
 							isStatic = true;
 							if (elemt[1] == "const") {
@@ -442,16 +472,37 @@ String SourceDef::GenerateCode(String name)
 	for (auto c : classes) {
 		int index = 0;
 		for (auto m : c->ctors) {
-			String fun = "tolua_" + name + "_" + c->name + "_" + std::to_string(index);
+			String getter = "tolua_" + name + "_" + c->name + "_" + std::to_string(index);
 			
-			ret = ret + "inline static " + c->name + " " + fun + m.overload.Signature() + "\n";
+			ret = ret + "inline static " + c->name + " " + getter + m.overload.Signature() + "\n";
 			ret = ret + "{\n";
 			ret = ret + " return " + c->name + m.overload.Callers((int) m.overload.parameters.size()) + ";\n";
 			ret = ret + "}\n";
 			index++;
 		}
-	}
 
+		/*
+		for (auto m : c->variables) {
+
+			String getter = "tolua_" + name + "_" + c->name + "_" + m.varName + "_get";
+			String setter = "tolua_" + name + "_" + c->name + "_" + m.varName + "_set";
+
+			if (m.isStatic) {
+				ret = ret + "inline static " +  m.varType + " " +  getter + "(void)" + "\n";
+				ret = ret + "{\n return " + c->name + "::" + m.varName + "; \n}";;
+				
+
+				if (!m.isConst) {
+					ret = ret + "inline static void " + setter + "("+m.varType+" value)" + "\n";
+					ret = ret + "{\n " + c->name + "::" + m.varName + " = value; \n}";
+				}
+					
+			}
+	
+		}
+		*/
+	}
+	ret = ret + "\n";
 	auto optUseSolLua = fields.find("s");
 	if (optUseSolLua == fields.end()) {
 		ret = ret + "int tolua_" + name + "_open(lua_State* L)\n";
@@ -472,35 +523,46 @@ String SourceDef::GenerateCode(String name)
 		ret = ret + " "+ module +".new_usertype<" + ( c->name) + ">(\"" + (c->aliasName.length() ? c->aliasName : c->name) + "\",";
 		ret = ret + " \n";
 		int index = 0;
+		/************************************************************************************
+			INHERITS
+		*/
+
+
 		if (c->inherits.size() > 0) {
 			ret = ret + " \tsol::base_classes, \n";
-			index = 0;
 			for (auto ih : c->inherits)
 			{
-				index++;
-				bool isLast = index == c->inherits.size();
-				ret = ret + " \t\tsol::bases<" + ih + ">";
-				if (!isLast)
+				if (index) {
 					ret = ret + ",\n";
+				}
+				index++;
+				ret = ret + " \t\tsol::bases<" + ih + ">";				
 			}
-			ret = ret + "(),\n";
+			ret = ret + "()";
 		}
+		/************************************************************************************
+			CTORS
+		*/
+
 		if (c->ctors.size() > 0) {
 			ret = ret + " \tsol::constructors<\n";
-			index = 0;
 			for (auto ctor : c->ctors)
 			{
-				index++;
-				bool isLast = index == c->ctors.size();
-				ret = ret + " \t\t" + c->name + ctor.overload.Signature();
-				if (!isLast)
+				if (index) {
 					ret = ret + ",\n";
+				}
+				index++;
+				ret = ret + " \t\t" + c->name + ctor.overload.Signature();				
 			}
-			ret = ret + ">(),\n";
+			ret = ret + ">()";
 		}
-		index = 0;
+
+		/************************************************************************************
+			METHODS
+		*/
+		int numMethod = 0;
 		for (auto m : c->methods) {
-			index++;
+			
 			String metaFunction = "\"" + m.methodName + "\"";
 			if (m.methodName == "operator+") {
 				metaFunction = "sol::meta_function::addition";
@@ -556,9 +618,15 @@ String SourceDef::GenerateCode(String name)
 			}
 			else
 			{
-				bool isLast = index == c->methods.size() && c->variables.size() == 0;
-
+				
+				numMethod++;
 				if (m.isOverload && ALLOW_OVERLOAD)  {
+
+					if (index) {
+						ret = ret + ",\n";
+					}
+					index++;
+
 					String overloads = ""; // &" + c->name + "::" + m.methodName
 					ret = ret + " \t" + metaFunction + ", sol::overload(\n";
 					int overloadIndex = 0;
@@ -593,13 +661,17 @@ String SourceDef::GenerateCode(String name)
 							
 						}
 					}
-					ret = ret + "\n\t),\n";
+					ret = ret + "\n\t)";
 
 					
 				}
 				else {
 					if (true)
 					{
+						if (index) {
+							ret = ret + ",\n";
+						}
+						index++;
 						auto r = m.overloads[0];
 						String proto = PointerToSharedPtr(m.returnType) + r.Construct((int)r.parameters.size());
 						if (r.isConst) {
@@ -611,44 +683,65 @@ String SourceDef::GenerateCode(String name)
 					else
 					{
 						ret = ret + " \t" + metaFunction + ", &" + c->name + "::" + m.methodName;
-					}
-					if (!isLast)
-						ret = ret + ",\n";
+					}					
 				}
 			}
 		}
-		index = 0;
+	
+	
+		/************************************************************************************
+			VARIABLES
+		*/
+			
 		for (auto m : c->variables) {
-			index++;
-			bool isLast = index == c->variables.size();
-			String getter = "[]() { return "+ c->name +"::"+m.varName+"; }";
-			String setter = "[]("+ m.varType +" value) { "+ c->name+"::"+m.varName+" = value; })";
+			if (index) {
+				ret = ret + ",\n";
+			}
+			index++;	
+
+			/*
+			String setter = "tolua_" + name + "_" + c->name + "_" + m.varName + "_set";
+			*/
+			String lambda_getter = "[]() { return " + c->name + "::" + m.varName + "; }";
+			String lambda_setter = "[](" + m.varType + " value) { " + c->name + "::" + m.varName + " = value; }";
+
 			if (m.isStatic) {
+
 				if (m.isConst)
-					ret = ret + " \t\"" + m.varName + "\", sol::property(" + getter + ")";
+					ret = ret + " \t\"" + m.varName + "\", sol::property(" + lambda_getter + ")";
 				else
-					ret = ret + " \t\"" + m.varName + "\", sol::property(" + getter + ", " + setter + " )";
+					ret = ret + " \t\"" + m.varName + "\", sol::property(" + lambda_getter + ", " + lambda_setter + " )";
+				
+
+				/*
+				if (m.isConst)
+					ret = ret + " \t\"" + m.varName + "\", sol::property(&" + getter + ")";
+				else
+					ret = ret + " \t\"" + m.varName + "\", sol::property(&" + getter + ", &" + setter + " )";
+				*/
 			}
 			else {
 				ret = ret + " \t\"" + m.varName + "\", &" + c->name + "::" + m.varName;
 			}
-			if (!isLast)
-			ret = ret + ",\n";
-			
 		}
-		 
 		
-		// ret = ret + ");";
+			
+		
+		/* END */
+		ret = ret + "\n);";
 		
 		ret = ret + "\n";
 		ret = ret + "\n";
+
+		/************************************************************************************
+			DEFAULT CTORS
+		*/
 
 		if (c->ctors.size() > 0) {
 			ret = ret + " tosol_S[\"" + (c->aliasName.length() ? c->aliasName : c->name) + "\"] =\n";
 			ret = ret + "\tsol::overload(\n";
 			index = 0;
 			for (auto m : c->ctors) {
-
 
 				String fun = "tolua_" + name + "_" + c->name + "_" + std::to_string(index);
 				String proto = c->name + m.overload.Signature();
@@ -659,7 +752,11 @@ String SourceDef::GenerateCode(String name)
 				index++;
 			}
 		}
-		ret = ret + "\n\t);\n";
+		if (c->ctors.size() > 0) {
+			ret = ret + ");";
+		}
+
+		ret = ret + "\n";
 	}
 	ret = ret + " return 0;\n}\n";
 	return ret;

@@ -8,7 +8,7 @@ struct b2Vec2 @ Vec2
 	b2Vec2();
 
 	/// Construct using coordinates.
-	b2Vec2(float xIn, float yIn);
+	b2Vec2(const float xIn, const float yIn);
 
 	/// Set this vector to all zeros.
 	void SetZero();
