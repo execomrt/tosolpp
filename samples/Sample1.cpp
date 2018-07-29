@@ -74,6 +74,8 @@ namespace Samples1
 	const b2Vec2 b2Vec2::ZERO;
 };
 
+
+
 #include "Sample1.inl" // Generated file
 
 

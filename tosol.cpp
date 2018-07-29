@@ -477,6 +477,7 @@ void SourceDef::Parse(char* value)
 }
 String SourceDef::GenerateCode(String name)
 {
+	bool useLambdaForProperties = true; // bigobj crash
 	String ret;
 	ret = ret + "/*\n";
 	ret = ret + "** Lua binding: " +name +"\n";
@@ -498,7 +499,7 @@ String SourceDef::GenerateCode(String name)
 			index++;
 		}
 
-		if (fields.find("l") != fields.end()) {
+		if (!useLambdaForProperties) {
 			
 			for (auto m : c->variables) {
 
@@ -649,7 +650,15 @@ String SourceDef::GenerateCode(String name)
 			{
 				
 				numMethod++;
-				if (m.isOverload && m.overloads.size() > 1)  {
+				bool shouldOverload = m.isOverload && m.overloads.size() > 1;
+				
+				for (auto r : m.overloads) {
+					if (r.hasDefaultParameter) {
+						shouldOverload = true;
+					}
+				}
+
+				if (shouldOverload)  {
 
 					if (index) {
 						ret = ret + ",\n";
@@ -674,7 +683,7 @@ String SourceDef::GenerateCode(String name)
 							
 
 							
-							ret = ret + "\t\tsol::resolve<" + proto + ">(&" + c->name + "::" + m.methodName + ")";
+							ret = ret + "\t\tsol::resolve<" + proto + ">(" + (m.isStatic ? "" : "&") + c->name + "::" + m.methodName + ")";
 							
 								
 						}
@@ -685,7 +694,7 @@ String SourceDef::GenerateCode(String name)
 								proto = proto + " const";
 							}
 							
-							ret = ret + "\t\tsol::resolve<" + proto + ">(&" + c->name + "::" + m.methodName + ")";							
+							ret = ret + "\t\tsol::resolve<" + proto + ">(" + (m.isStatic ? "" : "&") + c->name + "::" + m.methodName + ")";
 							
 						}
 					}
@@ -706,11 +715,11 @@ String SourceDef::GenerateCode(String name)
 							proto = proto + " const";
 						}
 						ret = ret + " \t" + metaFunction+",";
-						ret = ret + "sol::resolve<" + proto + ">(&" + c->name + "::" + m.methodName + ")";
+						ret = ret + "sol::resolve<" + proto + ">(" + (m.isStatic ? "" : "&") + c->name + "::" + m.methodName + ")";
 					}
 					else
 					{
-						ret = ret + " \t" + metaFunction + ", &" + c->name + "::" + m.methodName;
+						ret = ret + " \t" + metaFunction + ", " + (m.isStatic ? "" : "&") + c->name + "::" + m.methodName;
 					}					
 				}
 			}
@@ -727,7 +736,7 @@ String SourceDef::GenerateCode(String name)
 			}
 			index++;	
 
-			
+			 
 			String getter = "tolua_" + name + "_" + c->name + "_" + m.varName + "_get";
 			String setter = "tolua_" + name + "_" + c->name + "_" + m.varName + "_set";
 			
@@ -736,7 +745,7 @@ String SourceDef::GenerateCode(String name)
 
 			if (m.isStatic) {
 
-				if (fields.find("l") == fields.end()) {
+				if (useLambdaForProperties) {
 					if (m.isConst)
 						ret = ret + " \t\"" + m.varName + "\", sol::property(" + lambda_getter + ")";
 					else
@@ -751,6 +760,7 @@ String SourceDef::GenerateCode(String name)
 				}
 			}
 			else {
+				
 				ret = ret + " \t\"" + m.varName + "\", &" + c->name + "::" + m.varName;
 			}
 		}
