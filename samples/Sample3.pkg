@@ -1,0 +1,13 @@
+$using namespace Samples3
+
+
+module Game 
+{
+	class CharacterController
+	{
+		public:
+			void SetAnimationFrame(const double& time, const float blend, const std::string& sequence, const bool recursive=true, const int matrixlockmode = 0);
+			// virtual void SetInput(const float angle, const float move, const float strafe = 0.0, const float jump = 0.0, const bool crouch = false, const float maxacceleration = 1.0, const float maxdeceleration = 0.5, const bool detailed = false, const float maxrotationspeed = 5.0f);
+	};
+
+}

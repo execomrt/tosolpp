@@ -119,8 +119,10 @@ String SignatureDef::Construct(int numParameter)
 {
 	int index = 0;
 	String ret = "(";
+
 	for (auto it : parameters) {
 		bool isLast = numParameter == 0 ;
+	
 		auto param = std::get<0>(it);
 		auto value = std::get<1>(it);
 		auto typeName = PointerToSharedPtr(GetParameterType(param));
@@ -141,6 +143,7 @@ String SignatureDef::Construct(int numParameter)
 			}
 			if (typeName != ")") {
 				ret = ret + typeName;
+				numParameter--;
 			}
 		}
 	}
@@ -477,7 +480,9 @@ void SourceDef::Parse(char* value)
 }
 String SourceDef::GenerateCode(String name)
 {
-	bool useLambdaForProperties = true; // bigobj crash
+	bool useLambdaForProperties = false; // Error C1128 number of sections exceeded object file format limit: compile with /bigobj
+	bool generatedImplicitCtor = false; // fatal error C1202: recursive type or function dependency context too complex
+
 	String ret;
 	ret = ret + "/*\n";
 	ret = ret + "** Lua binding: " +name +"\n";
@@ -509,12 +514,20 @@ String SourceDef::GenerateCode(String name)
 				String setter = "tolua_" + name + "_" + c->name + "_" + m.varName + "_set";
 
 				if (m.isStatic) {
-					ret = ret + "inline static " + m.varType + " " + getter + "(void)" + "\n";
-					ret = ret + "{\n return " + c->name + "::" + m.varName + "; \n}\n";
 
+				
 					if (!m.isConst) {
+						ret = ret + "inline static " + m.varType + " " + getter + "(void)" + "\n";
+						ret = ret + "{\n return " + c->name + "::" + m.varName + "; \n}\n";
+
 						ret = ret + "inline static void " + setter + "(" + m.varType + " value)" + "\n";
 						ret = ret + "{\n " + c->name + "::" + m.varName + " = value; \n}\n";
+					}
+					else
+					{
+						ret = ret + "inline static const " + m.varType + " " + getter + "(void)" + "\n";
+						ret = ret + "{\n return " + c->name + "::" + m.varName + "; \n}\n";
+
 					}
 
 				}
@@ -675,15 +688,27 @@ String SourceDef::GenerateCode(String name)
 					
 						overloadIndex++;
 						if (r.hasDefaultParameter) {
-							int i = r.parameters.size() - r.GetNumExplicitParameters();
-							String proto = PointerToSharedPtr(m.returnType) + r.Construct(i);
-							if (r.isConst) {
-								proto = proto + " const";
-							}							
-							
+							bool didPrint = false;
+							int startIndex = r.GetNumExplicitParameters();
+							int endIndex = r.parameters.size();
+							for (int i = startIndex; i < endIndex; i++)
+							{							
+								if (didPrint) {
+									ret = ret + ",\n";
+								}
+								else {
+									didPrint = true;
+								}
+								String proto = PointerToSharedPtr(m.returnType) + r.Construct(i);
+								if (r.isConst) {
+									proto = proto + " const";
+								}
 
+
+
+								ret = ret + "\t\tsol::resolve<" + proto + ">(" + (m.isStatic ? "" : "&") + c->name + "::" + m.methodName + ")";
+							}
 							
-							ret = ret + "\t\tsol::resolve<" + proto + ">(" + (m.isStatic ? "" : "&") + c->name + "::" + m.methodName + ")";
 							
 								
 						}
@@ -777,24 +802,26 @@ String SourceDef::GenerateCode(String name)
 			DEFAULT CTORS
 		*/
 
-		if (fields.find("c") != fields.end() || c->ctors.size() == 1) {
-			if (c->ctors.size() > 0) {
-				ret = ret + " tosol_S[\"" + (c->aliasName.length() ? c->aliasName : c->name) + "\"] =\n";
-				ret = ret + "\tsol::overload(\n";
-				index = 0;
-				for (auto m : c->ctors) {
+		if (generatedImplicitCtor) {
+			if (c->ctors.size() == 1) {
+				if (c->ctors.size() > 0) {
+					ret = ret + " tosol_S[\"" + (c->aliasName.length() ? c->aliasName : c->name) + "\"] =\n";
+					ret = ret + "\tsol::overload(\n";
+					index = 0;
+					for (auto m : c->ctors) {
 
-					String fun = "tolua_" + name + "_" + c->name + "_" + std::to_string(index);
-					String proto = c->name + m.overload.Signature();
-					if (index > 0) {
-						ret = ret + ", \n";
+						String fun = "tolua_" + name + "_" + c->name + "_" + std::to_string(index);
+						String proto = c->name + m.overload.Signature();
+						if (index > 0) {
+							ret = ret + ", \n";
+						}
+						ret = ret + "\t\tsol::resolve<" + proto + " >(&" + fun + ")";
+						index++;
 					}
-					ret = ret + "\t\tsol::resolve<" + proto + " >(&" + fun + ")";
-					index++;
 				}
-			}
-			if (c->ctors.size() > 0) {
-				ret = ret + ");";
+				if (c->ctors.size() > 0) {
+					ret = ret + ");";
+				}
 			}
 		}
 
