@@ -916,7 +916,7 @@ int tosol(String filename)
 	{
 		f = fopen(outputName.c_str(), "wt");
 		if (f != nullptr) {
-			fwrite(ret.c_str(), ret.length() + 1, 1, f);
+			fwrite(ret.c_str(), ret.length(), 1, f);
 			fclose(f);
 		}
 	}
