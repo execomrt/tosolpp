@@ -1,4 +1,4 @@
-## tosol 0.0.9
+## tosol 0.1.0
 
 tosol is a command line application that convert tolua style (pkg) to Sol Lua API.
 
